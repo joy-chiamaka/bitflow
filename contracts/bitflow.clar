@@ -259,3 +259,60 @@
     )
   )
 )
+
+;; Validate milestone completion - cryptographic approval system
+(define-public (approve-utilization
+    (utilization-id uint)
+    (beneficiary-id uint)
+  )
+  (let (
+      (utilization-entry (unwrap! (map-get? utilization { id: utilization-id })
+        ERR-UTILIZATION-NOT-FOUND
+      ))
+      (beneficiary (unwrap! (get-beneficiary beneficiary-id) ERR-BENEFICIARY-NOT-FOUND))
+    )
+    (if (and
+        (is-authorized tx-sender ROLE-ADMIN)
+        (is-eq (get beneficiary-id utilization-entry) beneficiary-id)
+        (< beneficiary-id (+ (var-get beneficiary-count) u1))
+        (< utilization-id (+ (var-get utilization-count) u1))
+      )
+      (if (<= (get amount utilization-entry) (get received-amount beneficiary))
+        (begin
+          (map-set utilization { id: utilization-id }
+            (merge utilization-entry { status: "approved" })
+          )
+          (ok true)
+        )
+        ERR-INSUFFICIENT-FUNDS
+      )
+      ERR-NOT-AUTHORIZED
+    )
+  )
+)
+
+;; Query milestone record - impact transparency
+(define-read-only (get-utilization-by-id (utilization-id uint))
+  (match (map-get? utilization { id: utilization-id })
+    util (ok util)
+    ERR-NOT-FOUND
+  )
+)
+
+;; Get total milestone count - achievement metrics
+(define-read-only (get-utilization-count)
+  (ok (var-get utilization-count))
+)
+
+;; CONTRACT BOOTSTRAP
+
+;; Initialize Bitcoin-secured governance - deployer as genesis admin
+(define-private (initialize-contract)
+  (begin
+    (map-set roles { user: tx-sender } { role: ROLE-ADMIN })
+    (var-set contract-owner tx-sender)
+  )
+)
+
+;; Execute protocol initialization
+(initialize-contract)
